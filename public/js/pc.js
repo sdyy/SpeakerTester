@@ -351,7 +351,7 @@ function handleVolumeCalibrationResult(msg) {
     const avgDb = msg.db !== undefined ? msg.db : -100;
     
     // 計算最佳音量
-    const targetDb = -40; // 目標接收音量為 -40dB
+    const targetDb = -48; // 目標接收音量為 -48dB，確保 SNR 充足且防警報過度敏感
     const deltaDb = targetDb - avgDb;
     const baseVol = 0.5; // 播放基準音量為 50%
     
