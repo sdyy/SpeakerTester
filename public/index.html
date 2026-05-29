@@ -59,10 +59,7 @@
             });
         })();
     </script>
-    <!-- Chart.js for PC dashboard charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- QRCodeJS for generating phone link QR Code -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
     <!-- Stylesheet -->
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -310,52 +307,77 @@
 
     </div>
 
-    <!-- JavaScript Module Files -->
-    <script src="js/shared-ws.js?v=20260529_03"></script>
-    <script src="js/pc.js?v=20260529_03"></script>
-    <script src="js/mobile.js?v=20260529_03"></script>
+    <!-- 根據角色動態載入必要腳本的路由機制 -->
     <script>
-        // HTML 無依賴即時狀態診斷
-        document.addEventListener('DOMContentLoaded', () => {
-            const debugLog = document.getElementById('debug-log');
-            if (debugLog) {
-                // 先清除預設等待文字
-                debugLog.innerHTML = '';
-                
-                // 釋放緩衝區的早期日誌
-                if (window._debugBuffer) {
-                    window._debugBuffer.forEach(item => {
-                        window.logToScreen(item.msg, item.type);
-                    });
-                    window._debugBuffer = [];
-                }
-
-                const time = new Date().toLocaleTimeString();
-                const protocol = window.location.protocol;
-                const isSecure = window.isSecureContext ? '是 (Secure)' : '否 (Unsecure)';
-                window.logToScreen(`HTML 載入成功，正在初始化腳本...`, 'log');
-                window.logToScreen(`協定: ${protocol} | 安全上下文: ${isSecure}`, 'log');
-                if (protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                    window.logToScreen(`⚠️ 警告：非 HTTPS 且非 localhost 環境，麥克風 API (getUserMedia) 將被瀏覽器禁用！`, 'error');
-                }
-            }
-        });
-
-        // 初始化頁面路由與基礎邏輯
-        document.addEventListener('DOMContentLoaded', () => {
+        (function() {
             const urlParams = new URLSearchParams(window.location.search);
             const role = urlParams.get('role');
+            const version = '20260529_04';
 
-            if (role === 'pc') {
-                document.getElementById('pc-view').classList.remove('hidden');
-                initPC();
-            } else if (role === 'mobile') {
-                document.getElementById('mobile-view').classList.remove('hidden');
-                initMobile();
-            } else {
-                document.getElementById('role-select').classList.remove('hidden');
+            // HTML 無依賴即時狀態診斷
+            document.addEventListener('DOMContentLoaded', () => {
+                const debugLog = document.getElementById('debug-log');
+                if (debugLog) {
+                    debugLog.innerHTML = ''; // 清除預設字
+                    if (window._debugBuffer) {
+                        window._debugBuffer.forEach(item => {
+                            window.logToScreen(item.msg, item.type);
+                        });
+                        window._debugBuffer = [];
+                    }
+                    const time = new Date().toLocaleTimeString();
+                    const protocol = window.location.protocol;
+                    const isSecure = window.isSecureContext ? '是 (Secure)' : '否 (Unsecure)';
+                    window.logToScreen(`HTML 載入成功，正在動態加載必要模組...`, 'log');
+                    window.logToScreen(`協定: ${protocol} | 安全上下文: ${isSecure}`, 'log');
+                    if (protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                        window.logToScreen(`⚠️ 警告：非 HTTPS 且非 localhost 環境，麥克風 API (getUserMedia) 將被瀏覽器禁用！`, 'error');
+                    }
+                }
+            });
+
+            // 動態載入 Script 函式
+            function loadScript(src, callback) {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => {
+                    console.log(`模組載入成功: ${src}`);
+                    if (callback) callback();
+                };
+                script.onerror = (err) => {
+                    console.error(`模組載入失敗: ${src}`);
+                };
+                document.body.appendChild(script);
             }
-        });
+
+            // 在 DOMContentLoaded 後才開始載入外部腳本，以確保 debug-log 已經渲染
+            document.addEventListener('DOMContentLoaded', () => {
+                loadScript(`js/shared-ws.js?v=${version}`, () => {
+                    if (role === 'pc') {
+                        // PC 端：先載入 Chart.js 與 QRCode，再載入 pc.js 並啟動
+                        loadScript('https://cdn.jsdelivr.net/npm/chart.js', () => {
+                            loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js', () => {
+                                loadScript(`js/pc.js?v=${version}`, () => {
+                                    console.log('PC 端初始化完畢，準備啟動...');
+                                    document.getElementById('pc-view').classList.remove('hidden');
+                                    initPC();
+                                });
+                            });
+                        });
+                    } else if (role === 'mobile') {
+                        // 手機接收端：僅載入 mobile.js，之後初始化
+                        loadScript(`js/mobile.js?v=${version}`, () => {
+                            console.log('行動端初始化完畢，準備啟動...');
+                            document.getElementById('mobile-view').classList.remove('hidden');
+                            initMobile();
+                        });
+                    } else {
+                        // 預設角色選擇畫面
+                        document.getElementById('role-select').classList.remove('hidden');
+                    }
+                });
+            });
+        })();
 
         // PC Tab Switcher
         function switchTab(mode) {
