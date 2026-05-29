@@ -117,7 +117,7 @@ async function requestMicPermission() {
         const source = audioCtx.createMediaStreamSource(micStream);
         
         analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 2048; // 2048 點 FFT
+        analyser.fftSize = 4096; // 4096 點 FFT
         source.connect(analyser);
 
         // 啟動 UI 狀態
@@ -226,9 +226,9 @@ function startLiveMonitor() {
             const db = dataArray[i];
             if (db > -120) {
                 // 找出能量最強的頻點 (代表喇叭正在發出的主音頻)
-                // 限制在 50Hz 到 18000Hz 之間，避免低頻風切聲與超高頻噪聲干擾
+                // 限制在 18Hz 到 18000Hz 之間，以正確量測低頻並避免低頻風切聲與超高頻噪聲干擾
                 const freq = i * binResolution;
-                if (freq >= 50 && freq <= 18000 && db > maxDb) {
+                if (freq >= 18 && freq <= 18000 && db > maxDb) {
                     maxDb = db;
                     maxBinIndex = i;
                 }

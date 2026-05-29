@@ -144,7 +144,11 @@
                             <p class="mode-desc">播放指定頻率的單音，用以評估單點振幅強度與檢測諧波失真 (THD)。</p>
                             <div class="form-group">
                                 <label>測試頻率: <span id="val-single-freq">1000</span> Hz</label>
-                                <input type="range" id="single-freq" min="20" max="8000" value="1000" step="10" oninput="updateVal('single-freq')">
+                                <div class="slider-control-group">
+                                    <button class="btn-adjust minus" onclick="adjustFreq(-10)">−</button>
+                                    <input type="range" id="single-freq" min="20" max="8000" value="1000" step="10" oninput="updateVal('single-freq')">
+                                    <button class="btn-adjust plus" onclick="adjustFreq(10)">+</button>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>音量: <span id="val-single-vol">80</span>%</label>
@@ -388,10 +392,28 @@
             document.getElementById(`tab-${mode}`).classList.remove('hidden');
         }
 
-        // 即時顯示 Range 值變更
+        // 即時顯示 Range 值變更，並調用 PC 端即時音訊更新
         function updateVal(id) {
             const val = document.getElementById(id).value;
             document.getElementById(`val-${id}`).innerText = val;
+            if (id === 'single-freq') {
+                if (typeof updateActiveSingleToneFrequency === 'function') {
+                    updateActiveSingleToneFrequency(parseFloat(val));
+                }
+            } else if (id === 'single-vol') {
+                if (typeof updateActiveSingleToneVolume === 'function') {
+                    updateActiveSingleToneVolume(parseFloat(val) / 100);
+                }
+            }
+        }
+
+        // 單音頻率微調
+        function adjustFreq(amount) {
+            const slider = document.getElementById('single-freq');
+            let val = parseInt(slider.value) + amount;
+            val = Math.max(parseInt(slider.min), Math.min(parseInt(slider.max), val));
+            slider.value = val;
+            updateVal('single-freq');
         }
     </script>
 </body>

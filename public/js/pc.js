@@ -395,6 +395,29 @@ function toggleSingleTone() {
     });
 }
 
+// 即時更新播放中的單音頻率
+function updateActiveSingleToneFrequency(freq) {
+    if (isPlaying && activeSource && activeSource.frequency) {
+        activeSource.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        // 同步發送頻率更新訊息給手機端
+        if (wsClient) {
+            wsClient.send({
+                type: 'sound-played',
+                frequency: freq
+            });
+        }
+        console.log(`即時更新單音頻率至: ${freq} Hz`);
+    }
+}
+
+// 即時更新播放中的音量
+function updateActiveSingleToneVolume(vol) {
+    if (isPlaying && masterGain) {
+        masterGain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        console.log(`即時更新播放音量至: ${Math.round(vol * 100)}%`);
+    }
+}
+
 // -------------------------------------------------------------
 // 3. 噪聲播放 (Pink/White Noise)
 // -------------------------------------------------------------
