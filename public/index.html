@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>喇叭好壞測試器 | Speaker Quality Tester</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- Chart.js for PC dashboard charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- QRCodeJS for generating phone link QR Code -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app" class="glass-container">
+        
+        <!-- ============================================== -->
+        <!-- 角色選擇畫面 (預設) -->
+        <!-- ============================================== -->
+        <div id="role-select" class="view hidden">
+            <h1 class="gradient-text title animate-glow">喇叭好壞測試器</h1>
+            <p class="subtitle">Speaker Quality Tester & Analyzer</p>
+            <div class="card-grid">
+                <a href="?role=pc" class="choice-card pc-choice">
+                    <div class="icon">💻</div>
+                    <h3>電腦控制端 (PC)</h3>
+                    <p>負責產生高精度測試音訊、協調測試流程，並在寬螢幕上展示完整分析圖表與喇叭評估報告。</p>
+                    <span class="btn-primary">進入控制端</span>
+                </a>
+                <a href="?role=mobile" class="choice-card mobile-choice">
+                    <div class="icon">📱</div>
+                    <h3>手機接收端 (Mobile)</h3>
+                    <p>負責在喇叭旁透過麥克風採集音訊，執行即時快速傅立葉變換 (FFT) 與失真率計算。</p>
+                    <span class="btn-secondary">進入接收端</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- 電腦控制端介面 (PC Dashboard) -->
+        <!-- ============================================== -->
+        <div id="pc-view" class="view hidden">
+            <header class="pc-header">
+                <div>
+                    <h1 class="gradient-text animate-glow">喇叭測試控制台</h1>
+                    <p class="subtitle">PC Controller & Analysis Dashboard</p>
+                </div>
+                <div class="connection-status-badge">
+                    <span class="pulse-dot red" id="pc-status-dot"></span>
+                    <span id="pc-status-text">手機未連線</span>
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- 左側控制面板 -->
+                <div class="panel-left">
+                    <!-- 配對區 -->
+                    <div class="card card-pairing" id="pairing-card">
+                        <h2 class="card-title">📱 步驟 1：手機配對連線</h2>
+                        <p class="card-desc">請使用手機與電腦連接至同一 Wi-Fi，並掃描下方 QR Code 或輸入網址登入接收端：</p>
+                        <div class="qr-wrapper">
+                            <div id="qrcode"></div>
+                            <div class="qr-info">
+                                <a id="mobile-url-link" href="#" target="_blank" class="url-text">https://...</a>
+                                <p class="warning-text">⚠️ 瀏覽器提示安全警告時請點「進階」->「繼續前往」，以便手機啟用麥克風功能。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 測試控制區 -->
+                    <div class="card card-controls disabled" id="control-card">
+                        <h2 class="card-title">⚙️ 步驟 2：選擇測試模式</h2>
+                        
+                        <div class="tabs">
+                            <button class="tab-btn active" onclick="switchTab('sweep')">自動掃頻測試</button>
+                            <button class="tab-btn" onclick="switchTab('single')">單音失真測試</button>
+                            <button class="tab-btn" onclick="switchTab('noise')">噪聲頻譜測試</button>
+                        </div>
+
+                        <!-- 掃頻設定 -->
+                        <div id="tab-sweep" class="tab-content">
+                            <p class="mode-desc">以 20Hz 至 20,000Hz 對數掃頻，精確測量喇叭在各頻段的聲音響應，進而產生喇叭評分。</p>
+                            <div class="form-group">
+                                <label>掃頻時長 (秒): <span id="val-sweep-duration">6</span>s</label>
+                                <input type="range" id="sweep-duration" min="3" max="15" value="6" step="1" oninput="updateVal('sweep-duration')">
+                            </div>
+                            <button class="btn-action play-btn" id="btn-start-sweep" onclick="startSweep()">🔊 開始掃頻測試</button>
+                        </div>
+
+                        <!-- 單音設定 -->
+                        <div id="tab-single" class="tab-content hidden">
+                            <p class="mode-desc">播放指定頻率的單音，用以評估單點振幅強度與檢測諧波失真 (THD)。</p>
+                            <div class="form-group">
+                                <label>測試頻率: <span id="val-single-freq">1000</span> Hz</label>
+                                <input type="range" id="single-freq" min="100" max="8000" value="1000" step="50" oninput="updateVal('single-freq')">
+                            </div>
+                            <div class="form-group">
+                                <label>音量: <span id="val-single-vol">80</span>%</label>
+                                <input type="range" id="single-vol" min="0" max="100" value="80" step="5" oninput="updateVal('single-vol')">
+                            </div>
+                            <div class="btn-row">
+                                <button class="btn-action play-btn" id="btn-start-single" onclick="toggleSingleTone()">🔊 播放單音</button>
+                            </div>
+                        </div>
+
+                        <!-- 噪聲設定 -->
+                        <div id="tab-noise" class="tab-content hidden">
+                            <p class="mode-desc">播放寬頻噪聲（白噪聲或粉紅噪聲），用以即時觀測全頻段的聲學反射與響應。</p>
+                            <div class="form-group">
+                                <label>噪聲類型:</label>
+                                <div class="radio-group">
+                                    <label><input type="radio" name="noise-type" value="pink" checked> 粉紅噪聲 (Pink Noise)</label>
+                                    <label><input type="radio" name="noise-type" value="white"> 白噪聲 (White Noise)</label>
+                                </div>
+                            </div>
+                            <button class="btn-action play-btn" id="btn-start-noise" onclick="toggleNoise()">🔊 播放噪聲</button>
+                        </div>
+
+                        <!-- 測試狀態指示器 -->
+                        <div class="test-progress-bar hidden" id="test-progress-container">
+                            <div class="progress-info">
+                                <span id="progress-label">測試進行中...</span>
+                                <span id="progress-percent">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-fill" id="progress-fill"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側圖表與報告面板 -->
+                <div class="panel-right">
+                    <!-- 即時監控圖表 -->
+                    <div class="card card-visual">
+                        <div class="chart-header">
+                            <h2 class="card-title">📊 聲學分析圖表</h2>
+                            <div class="live-indicator">
+                                <span class="pulse-dot green" id="live-data-dot"></span>
+                                <span id="live-data-text" style="font-size: 12px; color: #a0aec0;">接收端即時串流中</span>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="responseChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- 喇叭好壞評估報告 -->
+                    <div class="card card-report" id="report-card">
+                        <h2 class="card-title">📝 喇叭效能評估報告</h2>
+                        <div class="report-placeholder" id="report-placeholder">
+                            <div class="report-placeholder-icon">📋</div>
+                            <p>完成「自動掃頻測試」後將在此自動生成詳細分析報告與品質星等。</p>
+                        </div>
+                        <div class="report-content hidden" id="report-content">
+                            <div class="score-section">
+                                <div class="score-circle">
+                                    <span class="score-val" id="report-score">--</span>
+                                    <span class="score-label">綜合評分</span>
+                                </div>
+                                <div class="rating-badge" id="report-badge">評估中</div>
+                            </div>
+                            <div class="metrics-grid">
+                                <div class="metric-item">
+                                    <div class="metric-title">🔊 低頻延伸截止點</div>
+                                    <div class="metric-val" id="metric-low-limit">-- Hz</div>
+                                    <div class="metric-status" id="metric-low-status">--</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-title">⚡ 高頻延伸截止點</div>
+                                    <div class="metric-val" id="metric-high-limit">-- Hz</div>
+                                    <div class="metric-status" id="metric-high-status">--</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-title">📈 頻率平坦度 (波動度)</div>
+                                    <div class="metric-val" id="metric-flatness">-- dB</div>
+                                    <div class="metric-status" id="metric-flatness-status">--</div>
+                                </div>
+                                <div class="metric-item">
+                                    <div class="metric-title">🌀 估算總諧波失真 (THD)</div>
+                                    <div class="metric-val" id="metric-thd">-- %</div>
+                                    <div class="metric-status" id="metric-thd-status">--</div>
+                                </div>
+                            </div>
+                            <div class="report-diagnose" id="report-diagnose">
+                                正在等待測試數據分析...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- 手機接收端介面 (Mobile Receiver) -->
+        <!-- ============================================== -->
+        <div id="mobile-view" class="view hidden">
+            <header class="mobile-header">
+                <div>
+                    <h1 class="gradient-text">手機音訊接收端</h1>
+                    <p class="subtitle" style="font-size:12px;">Mobile Audio Analyzer</p>
+                </div>
+                <div class="connection-status-badge">
+                    <span class="pulse-dot red" id="mobile-status-dot"></span>
+                    <span id="mobile-status-text">未連線到電腦</span>
+                </div>
+            </header>
+
+            <!-- 麥克風授權與校正 -->
+            <div class="card card-mic-setup" id="mic-setup-card">
+                <h2>🎤 麥克風存取設定</h2>
+                <p>需要取得麥克風使用權限，並在寧靜的環境下進行背景噪聲校準。</p>
+                <div class="button-container">
+                    <button class="btn-primary" id="btn-request-mic" onclick="requestMicPermission()">🔑 授權麥克風</button>
+                    <button class="btn-secondary disabled" id="btn-calibrate" onclick="calibrateNoiseFloor()" disabled>⚡ 校準背景噪聲</button>
+                </div>
+                <div class="calibration-status" id="calibration-info">
+                    請先授權麥克風。
+                </div>
+            </div>
+
+            <!-- 手機量測監控區 -->
+            <div class="card card-monitor disabled" id="monitor-card">
+                <h2>📈 即時聲學量測</h2>
+                <div class="monitor-stats">
+                    <div class="stat-box">
+                        <span class="stat-label">當前音量</span>
+                        <span class="stat-val" id="mon-volume">-- dB</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">環境底噪</span>
+                        <span class="stat-val" id="mon-noise">-- dB</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">主要頻點</span>
+                        <span class="stat-val" id="mon-freq">-- Hz</span>
+                    </div>
+                </div>
+
+                <div class="realtime-status-banner" id="mobile-mode-banner">
+                    🟢 連線中，等待電腦端發起測試指令...
+                </div>
+
+                <div class="fft-canvas-container">
+                    <canvas id="miniFFT"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JavaScript Module Files -->
+    <script src="js/shared-ws.js"></script>
+    <script src="js/pc.js"></script>
+    <script src="js/mobile.js"></script>
+    <script>
+        // 初始化頁面路由與基礎邏輯
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const role = urlParams.get('role');
+
+            if (role === 'pc') {
+                document.getElementById('pc-view').classList.remove('hidden');
+                initPC();
+            } else if (role === 'mobile') {
+                document.getElementById('mobile-view').classList.remove('hidden');
+                initMobile();
+            } else {
+                document.getElementById('role-select').classList.remove('hidden');
+            }
+        });
+
+        // PC Tab Switcher
+        function switchTab(mode) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+
+            event.target.classList.add('active');
+            document.getElementById(`tab-${mode}`).classList.remove('hidden');
+        }
+
+        // 即時顯示 Range 值變更
+        function updateVal(id) {
+            const val = document.getElementById(id).value;
+            document.getElementById(`val-${id}`).innerText = val;
+        }
+    </script>
+</body>
+</html>
