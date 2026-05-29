@@ -194,6 +194,12 @@ function calibrateNoiseFloor() {
             
             // 更新即時面板顯示
             document.getElementById('mon-noise').innerText = `${noiseFloorDb.toFixed(1)} dB`;
+            
+            // 加上 calibrated 類別以淡化麥克風設定卡片，使即時量測區更為突出
+            const micSetupCard = document.getElementById('mic-setup-card');
+            if (micSetupCard) {
+                micSetupCard.classList.add('calibrated');
+            }
         }
     }, intervalMs);
 }
