@@ -56,3 +56,21 @@
 - 整合了 **Chart.js**：
   - 電腦端具備對數 x 軸 (Logarithmic Scale) 座標圖表，能同時完美呈現「自動掃頻的頻率響應曲線」與「手機傳回的即時 FFT 頻譜」。
 - 手機端具備自定義 Canvas 渲染的「即時迷你頻譜瀑布圖」，具備霓虹紫色漸層與流暢的動態，提升操作的科技感與即時反饋感。
+
+---
+
+## 🔧 2026-05-29 重要修復紀錄
+
+我們針對在不同設備與 iOS 系統上測試時遇到的阻礙，進行了三項核心修復與架構優化：
+
+1. **iOS TLS/SSL 握手崩潰修復 ([server.js](file:///C:/Users/sdyyh/Documents/antigravity/vibrant-rutherford/server.js))**：
+   - **原因**：`selfsigned` 憑證生成庫更新為非同步 Promise，導致伺服器先前以同步方式啟動時憑證實體為 `undefined`。且 iOS 系統強制要求憑證必須包含 `extKeyUsage` 中的 `serverAuth` (伺服器驗證) 欄位與 `subjectAltName` (SAN) 的 IP 位址。
+   - **修復**：將伺服器初始化改為 `async IIFE` 以等待憑證 Promise 解決，並補齊必要的安全擴充屬性。
+
+2. **行動端按角色動態加載 ([index.html](file:///C:/Users/sdyyh/Documents/antigravity/vibrant-rutherford/public/index.html))**：
+   - **原因**：iOS 瀏覽器快取機制頑固，且載入電腦端專屬 CDN 資源（如 `chart.js`、`qrcode.js`）時若遇到區域網路限制，會阻斷手機端 `mobile.js` 的解析與初始化，導致點選「授權麥克風」按鈕無反應，並引發 `initMobile is not defined` 錯誤。
+   - **修復**：改為根據 `role` 查詢參數動態異步加載腳本的架構，並加入「無依賴即時日誌診斷」和 `?v=...` 防快取參數。
+
+3. **雙端掃頻同步與高頻斷崖修復 ([mobile.js](file:///C:/Users/sdyyh/Documents/antigravity/vibrant-rutherford/public/js/mobile.js))**：
+   - **原因**：使用雙端電腦/手機的絕對時鐘計算掃頻時間，因系統時間差（通常在 100~300ms）及網路傳播延遲，導致搜尋窗口與喇叭播放頻率嚴重錯開。在 400Hz 以上時錯開幅度超過 FFT Bin 寬度，使得手機端只錄到背景噪音（-90dB）而斷崖暴跌，回傳 0 個點，使電腦端卡在「分析中」。
+   - **修復**：改用手機端本地時間加延遲為起點，並升級為 **「動態頻帶峰值尋找演算法（Dynamic Peak Search）」**，在目前預期頻率的前後 `±450ms` 頻帶內動態尋找能量最強的實際主音頻率，達成高精度的掃頻追蹤。
