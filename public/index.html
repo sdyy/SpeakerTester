@@ -260,10 +260,25 @@
     </div>
 
     <!-- JavaScript Module Files -->
-    <script src="js/shared-ws.js"></script>
-    <script src="js/pc.js"></script>
-    <script src="js/mobile.js"></script>
+    <script src="js/shared-ws.js?v=20260529_03"></script>
+    <script src="js/pc.js?v=20260529_03"></script>
+    <script src="js/mobile.js?v=20260529_03"></script>
     <script>
+        // HTML 無依賴即時狀態診斷
+        document.addEventListener('DOMContentLoaded', () => {
+            const debugLog = document.getElementById('debug-log');
+            if (debugLog) {
+                const time = new Date().toLocaleTimeString();
+                const protocol = window.location.protocol;
+                const isSecure = window.isSecureContext ? '是 (Secure)' : '否 (Unsecure)';
+                debugLog.innerHTML = `<div style="color: #63b3ed;">[${time}] HTML 載入成功，正在初始化腳本...</div>`;
+                debugLog.innerHTML += `<div style="color: #63b3ed;">[${time}] 協定: ${protocol} | 安全上下文: ${isSecure}</div>`;
+                if (protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                    debugLog.innerHTML += `<div style="color: #e53e3e;">[${time}] ⚠️ 警告：非 HTTPS 且非 localhost 環境，麥克風 API (getUserMedia) 將被瀏覽器禁用！</div>`;
+                }
+            }
+        });
+
         // 初始化頁面路由與基礎邏輯
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
