@@ -2,6 +2,47 @@
  * 喇叭好壞測試器 - 手機接收端 (Mobile) 邏輯
  */
 
+// -------------------------------------------------------------
+// 行動端即時日誌與除錯
+// -------------------------------------------------------------
+function logToScreen(msg, type = 'log') {
+    const logEl = document.getElementById('debug-log');
+    if (logEl) {
+        const time = new Date().toLocaleTimeString();
+        const color = type === 'error' ? '#f56565' : (type === 'warn' ? '#ed8936' : '#cbd5e0');
+        logEl.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;">[${time}] ${msg}</div>`;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+}
+
+// 覆寫 console 方法以方便手機端直接閱讀日誌
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+
+console.log = function(...args) {
+    originalLog.apply(console, args);
+    logToScreen(args.join(' '), 'log');
+};
+
+console.warn = function(...args) {
+    originalWarn.apply(console, args);
+    logToScreen(args.join(' '), 'warn');
+};
+
+console.error = function(...args) {
+    originalError.apply(console, args);
+    logToScreen(args.join(' '), 'error');
+};
+
+window.addEventListener('error', (event) => {
+    console.error(`JS 錯誤: ${event.message} at ${event.filename}:${event.lineno}`);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error(`Promise 拒絕: ${event.reason}`);
+});
+
 let wsClient = null;
 let audioCtx = null;
 let analyser = null;
@@ -85,6 +126,11 @@ function resizeCanvas() {
 // -------------------------------------------------------------
 async function requestMicPermission() {
     try {
+        console.log('開始請求麥克風權限...');
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('您的瀏覽器或環境不支援 getUserMedia (請確認是否使用 HTTPS)');
+        }
+
         // 重要聲學設定：必須關閉所有網頁瀏覽器預設的音訊處理，
         // 否則回音消除與自動增益控制會把測試音訊當成噪音消除或壓低！
         const constraints = {
@@ -95,8 +141,16 @@ async function requestMicPermission() {
             }
         };
 
-        micStream = await navigator.mediaDevices.getUserMedia(constraints);
+        try {
+            console.log('嘗試以無失真聲學設定請求麥克風...');
+            micStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (initialErr) {
+            console.warn('無失真聲學設定請求被拒絕或不支援，嘗試以基本音訊設定請求...', initialErr);
+            // 降級方案：使用最基本的 audio: true，避免因為 constraints 不支援而卡死
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
         
+        console.log('成功取得麥克風串流，正在初始化 Web Audio API...');
         // 初始化 Web Audio API
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const source = audioCtx.createMediaStreamSource(micStream);
@@ -115,6 +169,7 @@ async function requestMicPermission() {
 
         // 啟動 FFT 監控與 Canvas 繪圖
         startLiveMonitor();
+        console.log('麥克風監控與 FFT 初始化完畢');
 
     } catch (err) {
         console.error('取得麥克風權限失敗:', err);
