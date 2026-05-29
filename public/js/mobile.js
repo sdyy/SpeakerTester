@@ -447,30 +447,34 @@ function handleCalibrateVolume(duration) {
     let count = 0;
     let totalDb = 0;
 
+    const sampleRate = audioCtx.sampleRate;
+    const binResolution = sampleRate / analyser.fftSize;
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Float32Array(bufferLength);
 
     const calibrationInterval = setInterval(() => {
         analyser.getFloatFrequencyData(dataArray);
 
-        // 計算該訊框的平均分貝值
-        let sum = 0;
-        let validBins = 0;
+        // 尋找 800Hz 到 1200Hz 之間的最大分貝值 (1kHz 基準嗶聲能量)
+        let maxDb = -150;
         for (let i = 0; i < bufferLength; i++) {
-            if (dataArray[i] > -150) {
-                sum += dataArray[i];
-                validBins++;
+            const freq = i * binResolution;
+            if (freq >= 800 && freq <= 1200) {
+                if (dataArray[i] > maxDb) {
+                    maxDb = dataArray[i];
+                }
             }
         }
 
-        if (validBins > 0) {
-            totalDb += (sum / validBins);
+        // 確保尋找到有效值
+        if (maxDb > -150) {
+            totalDb += maxDb;
             count++;
         }
 
         if (count >= iterations) {
             clearInterval(calibrationInterval);
-            const avgDb = totalDb / count;
+            const avgDb = count > 0 ? (totalDb / count) : -100;
             console.log(`音量校準完成，平均接收分貝: ${avgDb.toFixed(1)} dB`);
 
             // 回傳數據給 PC 端
