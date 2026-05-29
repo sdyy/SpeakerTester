@@ -425,6 +425,13 @@ function stopLocalTest() {
 function handleCalibrateVolume(duration) {
     if (!analyser || !audioCtx) {
         console.warn('音訊未授權或未初始化');
+        // 主動向電腦端回傳錯誤訊息，防止電腦端無限等待
+        if (wsClient) {
+            wsClient.send({
+                type: 'volume-calibration-result',
+                error: 'mic-not-ready'
+            });
+        }
         return;
     }
 

@@ -9,6 +9,7 @@ let activeSource = null;
 let isPlaying = false;
 let testTimeout = null;
 let testProgressInterval = null;
+let calibrationTimeoutGuard = null;
 
 // 圖表實例
 let responseChart = null;
@@ -97,8 +98,8 @@ function initPC() {
                 break;
 
             case 'volume-calibration-result':
-                // 收到音量校準結果的分貝數
-                handleVolumeCalibrationResult(msg.db);
+                // 收到音量校準結果
+                handleVolumeCalibrationResult(msg);
                 break;
         }
     });
@@ -301,6 +302,22 @@ function triggerVolumeCalibration() {
         console.log('基準校準音播放開始，音量 50%');
     }, 150);
 
+    if (calibrationTimeoutGuard) {
+        clearTimeout(calibrationTimeoutGuard);
+    }
+    // 3.5 秒超時保護機制，防止卡死在「校準中」
+    calibrationTimeoutGuard = setTimeout(() => {
+        const statusBadge = document.getElementById('vol-cal-status');
+        const descText = document.querySelector('#vol-calibration-section .cal-desc');
+        if (statusBadge && statusBadge.innerText === '校準中') {
+            statusBadge.className = 'cal-status warning';
+            statusBadge.innerText = '校準失敗';
+            if (descText) {
+                descText.innerText = '⚠️ 校準逾時：未收到手機端反饋。請確保手機端已連線且已點選「授權麥克風」。';
+            }
+        }
+    }, 3500);
+
     // 1.5 秒後自動停止播放
     testTimeout = setTimeout(() => {
         stopAllPlayback();
@@ -309,10 +326,29 @@ function triggerVolumeCalibration() {
 }
 
 // 處理音量校準結果，自動計算最佳音量並更新 Slider
-function handleVolumeCalibrationResult(avgDb) {
+function handleVolumeCalibrationResult(msg) {
+    if (calibrationTimeoutGuard) {
+        clearTimeout(calibrationTimeoutGuard);
+        calibrationTimeoutGuard = null;
+    }
+
     const statusBadge = document.getElementById('vol-cal-status');
     const descText = document.querySelector('#vol-calibration-section .cal-desc');
     const volSlider = document.getElementById('single-vol');
+    
+    // 檢查手機端是否尚未取得麥克風授權
+    if (msg.error === 'mic-not-ready') {
+        if (statusBadge) {
+            statusBadge.className = 'cal-status warning';
+            statusBadge.innerText = '未授權';
+        }
+        if (descText) {
+            descText.innerText = '⚠️ 校準失敗：手機端尚未啟用麥克風。請先在手機點選「授權麥克風」。';
+        }
+        return;
+    }
+
+    const avgDb = msg.db !== undefined ? msg.db : -100;
     
     // 計算最佳音量
     const targetDb = -40; // 目標接收音量為 -40dB
