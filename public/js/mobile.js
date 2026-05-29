@@ -110,9 +110,27 @@ async function requestMicPermission() {
             console.log('嘗試以無失真聲學設定請求麥克風...');
             micStream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (initialErr) {
-            console.warn('無失真聲學設定請求被拒絕或不支援，嘗試以基本音訊設定請求...', initialErr);
-            // 降級方案：使用最基本的 audio: true，避免因為 constraints 不支援而卡死
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.warn('完整無失真設定請求被拒絕或不支援，嘗試中度降級設定 (僅停用回音消除與降噪)...', initialErr);
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false
+                    }
+                });
+            } catch (secondErr) {
+                console.warn('中度降級設定亦不支援，嘗試基礎聲學設定 (僅停用回音消除)...', secondErr);
+                try {
+                    micStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: false
+                        }
+                    });
+                } catch (thirdErr) {
+                    console.warn('所有無失真與降級聲學設定均失敗，退回全自動基本音訊設定...', thirdErr);
+                    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                }
+            }
         }
         
         console.log('成功取得麥克風串流，正在初始化 Web Audio API...');
