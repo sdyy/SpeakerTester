@@ -68,6 +68,10 @@ function initMobile() {
                 // 電腦端正在播放單音或噪聲的頻率更新
                 handleSoundPlayed(msg.frequency);
                 break;
+
+            case 'calibrate-volume':
+                handleCalibrateVolume(msg.duration);
+                break;
         }
     });
 
@@ -415,6 +419,70 @@ function stopLocalTest() {
     const banner = document.getElementById('mobile-mode-banner');
     banner.className = 'realtime-status-banner';
     banner.innerText = '🟢 連線中，等待電腦端發起測試指令...';
+}
+
+// 實作基準音量校正接收與檢測
+function handleCalibrateVolume(duration) {
+    if (!analyser || !audioCtx) {
+        console.warn('音訊未授權或未初始化');
+        return;
+    }
+
+    const banner = document.getElementById('mobile-mode-banner');
+    if (banner) {
+        banner.className = 'realtime-status-banner testing';
+        banner.innerText = '🔊 正在進行音量自動校準... 請保持環境安靜';
+    }
+
+    const durationMs = duration * 1000;
+    const intervalMs = 50;
+    const iterations = durationMs / intervalMs;
+    let count = 0;
+    let totalDb = 0;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Float32Array(bufferLength);
+
+    const calibrationInterval = setInterval(() => {
+        analyser.getFloatFrequencyData(dataArray);
+
+        // 計算該訊框的平均分貝值
+        let sum = 0;
+        let validBins = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            if (dataArray[i] > -150) {
+                sum += dataArray[i];
+                validBins++;
+            }
+        }
+
+        if (validBins > 0) {
+            totalDb += (sum / validBins);
+            count++;
+        }
+
+        if (count >= iterations) {
+            clearInterval(calibrationInterval);
+            const avgDb = totalDb / count;
+            console.log(`音量校準完成，平均接收分貝: ${avgDb.toFixed(1)} dB`);
+
+            // 回傳數據給 PC 端
+            if (wsClient) {
+                wsClient.send({
+                    type: 'volume-calibration-result',
+                    db: avgDb
+                });
+            }
+
+            if (banner) {
+                banner.className = 'realtime-status-banner';
+                banner.innerText = '🟢 音量校準完成，數據已傳送電腦端！';
+                setTimeout(() => {
+                    banner.innerText = '🟢 連線中，等待電腦端發起測試指令...';
+                }, 2000);
+            }
+        }
+    }, intervalMs);
 }
 
 // -------------------------------------------------------------

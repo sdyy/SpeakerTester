@@ -95,6 +95,11 @@ function initPC() {
                 // 收到測試報告
                 renderTestReport(msg.result);
                 break;
+
+            case 'volume-calibration-result':
+                // 收到音量校準結果的分貝數
+                handleVolumeCalibrationResult(msg.db);
+                break;
         }
     });
 
@@ -250,6 +255,112 @@ function stopAllPlayback() {
     document.getElementById('btn-start-noise').innerText = '🔊 播放噪聲';
     document.getElementById('btn-start-noise').classList.remove('playing');
     document.getElementById('test-progress-container').classList.add('hidden');
+}
+
+// 啟動音量自動校準
+function triggerVolumeCalibration() {
+    if (isPlaying) {
+        stopAllPlayback();
+    }
+    
+    const btn = document.getElementById('btn-calibrate-vol');
+    const statusBadge = document.getElementById('vol-cal-status');
+    
+    if (btn) btn.innerText = '⚡ 正在播放基準音...';
+    if (statusBadge) {
+        statusBadge.className = 'cal-status warning';
+        statusBadge.innerText = '校準中';
+    }
+
+    ensureAudioContext();
+    isPlaying = true;
+
+    // 強制以 50% 基準音量播放，以防止初始過大或過小
+    const baseVol = 0.5;
+    masterGain.gain.setValueAtTime(baseVol, audioCtx.currentTime);
+
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1000, audioCtx.currentTime); // 1kHz 基準音
+    osc.connect(masterGain);
+    
+    activeSource = osc;
+
+    // 通知手機端開始採樣
+    if (wsClient) {
+        wsClient.send({
+            type: 'calibrate-volume',
+            duration: 1.5
+        });
+    }
+
+    // 延遲 150ms 播放以確保手機端準備就緒
+    setTimeout(() => {
+        if (!isPlaying) return;
+        osc.start();
+        console.log('基準校準音播放開始，音量 50%');
+    }, 150);
+
+    // 1.5 秒後自動停止播放
+    testTimeout = setTimeout(() => {
+        stopAllPlayback();
+        if (btn) btn.innerText = '⚡ 開始自動調整音量';
+    }, 1650);
+}
+
+// 處理音量校準結果，自動計算最佳音量並更新 Slider
+function handleVolumeCalibrationResult(avgDb) {
+    const statusBadge = document.getElementById('vol-cal-status');
+    const descText = document.querySelector('#vol-calibration-section .cal-desc');
+    const volSlider = document.getElementById('single-vol');
+    
+    // 計算最佳音量
+    const targetDb = -40; // 目標接收音量為 -40dB
+    const deltaDb = targetDb - avgDb;
+    const baseVol = 0.5; // 播放基準音量為 50%
+    
+    let targetVol = baseVol * Math.pow(10, deltaDb / 20);
+    let volPercent = Math.round(targetVol * 100);
+    
+    let statusClass = 'success';
+    let statusText = '校準完成';
+    let descMsg = '';
+    
+    if (volPercent > 100) {
+        volPercent = 100;
+        statusClass = 'warning';
+        statusText = '建議靠近';
+        descMsg = '⚠️ 已自動將測試音量調至最大 (100%)。若聲音依然偏小，請將手機更靠近喇叭，或調高電腦系統主音量。';
+    } else if (volPercent < 10) {
+        volPercent = 10;
+        statusClass = 'success';
+        statusText = '自動降音';
+        descMsg = `🔊 偵測到聲音過大。已自動將測試音量調降至 ${volPercent}%，以防止手機端麥克風過載爆音。`;
+    } else {
+        statusClass = 'success';
+        statusText = `已設定 ${volPercent}%`;
+        descMsg = `✅ 音量校準完成！系統已根據手機端反饋，自動將測試音量調整至最佳的 ${volPercent}%。`;
+    }
+    
+    // 更新拉霸與 UI
+    if (volSlider) {
+        volSlider.value = volPercent;
+        const valDisp = document.getElementById('val-single-vol');
+        if (valDisp) valDisp.innerText = volPercent;
+    }
+    
+    // 更新 masterGain 增益
+    if (masterGain) {
+        masterGain.gain.setValueAtTime(volPercent / 100, audioCtx.currentTime);
+    }
+    
+    if (statusBadge) {
+        statusBadge.className = `cal-status ${statusClass}`;
+        statusBadge.innerText = statusText;
+    }
+    if (descText) {
+        descText.innerText = descMsg;
+    }
 }
 
 // -------------------------------------------------------------

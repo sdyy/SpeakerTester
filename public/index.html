@@ -123,6 +123,16 @@
                     <div class="card card-controls disabled" id="control-card">
                         <h2 class="card-title">⚙️ 步驟 2：選擇測試模式</h2>
                         
+                        <!-- 音量自動校準區 -->
+                        <div class="calibration-section" id="vol-calibration-section">
+                            <div class="cal-header">
+                                <span class="cal-title">🔊 測試音量自動校準 (建議)</span>
+                                <span class="cal-status" id="vol-cal-status">未校準</span>
+                            </div>
+                            <p class="cal-desc">點擊下方按鈕，系統將播放 1.5 秒單音，並根據手機接收分貝數自動調整電腦輸出音量，防止破音或底噪干擾。</p>
+                            <button class="btn-secondary" id="btn-calibrate-vol" onclick="startVolumeCalibration()" style="width: 100%; margin-top: 10px; padding: 8px 12px; font-size: 0.85rem;">⚡ 開始自動調整音量</button>
+                        </div>
+                        
                         <div class="tabs">
                             <button class="tab-btn active" onclick="switchTab('sweep')">自動掃頻測試</button>
                             <button class="tab-btn" onclick="switchTab('single')">單音失真測試</button>
@@ -414,6 +424,13 @@
             val = Math.max(parseInt(slider.min), Math.min(parseInt(slider.max), val));
             slider.value = val;
             updateVal('single-freq');
+        }
+
+        // 呼叫 PC 端啟動音量自動校準
+        function startVolumeCalibration() {
+            if (typeof triggerVolumeCalibration === 'function') {
+                triggerVolumeCalibration();
+            }
         }
     </script>
 </body>
