@@ -8,6 +8,57 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- 全域錯誤與主控台日誌攔截（需在載入任何外部 JS 前執行） -->
+    <script>
+        (function() {
+            window._debugBuffer = [];
+            window.logToScreen = function(msg, type = 'log') {
+                const logEl = document.getElementById('debug-log');
+                if (logEl) {
+                    const time = new Date().toLocaleTimeString();
+                    const color = type === 'error' ? '#f56565' : (type === 'warn' ? '#ed8936' : '#cbd5e0');
+                    if (logEl.innerHTML.indexOf('等待事件...') !== -1) {
+                        logEl.innerHTML = '';
+                    }
+                    logEl.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;">[${time}] ${msg}</div>`;
+                    logEl.scrollTop = logEl.scrollHeight;
+                } else {
+                    window._debugBuffer.push({ msg, type });
+                }
+            };
+
+            const originalLog = console.log;
+            const originalWarn = console.warn;
+            const originalError = console.error;
+
+            console.log = function(...args) {
+                originalLog.apply(console, args);
+                window.logToScreen(args.join(' '), 'log');
+            };
+
+            console.warn = function(...args) {
+                originalWarn.apply(console, args);
+                window.logToScreen(args.join(' '), 'warn');
+            };
+
+            console.error = function(...args) {
+                originalError.apply(console, args);
+                window.logToScreen(args.join(' '), 'error');
+            };
+
+            window.addEventListener('error', (event) => {
+                if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
+                    console.error(`資源載入失敗: ${event.target.src || event.target.href}`);
+                } else {
+                    console.error(`JS 錯誤: ${event.message} 在 ${event.filename || '未知'}:${event.lineno || 0}`);
+                }
+            }, true);
+
+            window.addEventListener('unhandledrejection', (event) => {
+                console.error(`Promise 拒絕: ${event.reason}`);
+            });
+        })();
+    </script>
     <!-- Chart.js for PC dashboard charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- QRCodeJS for generating phone link QR Code -->
@@ -268,13 +319,24 @@
         document.addEventListener('DOMContentLoaded', () => {
             const debugLog = document.getElementById('debug-log');
             if (debugLog) {
+                // 先清除預設等待文字
+                debugLog.innerHTML = '';
+                
+                // 釋放緩衝區的早期日誌
+                if (window._debugBuffer) {
+                    window._debugBuffer.forEach(item => {
+                        window.logToScreen(item.msg, item.type);
+                    });
+                    window._debugBuffer = [];
+                }
+
                 const time = new Date().toLocaleTimeString();
                 const protocol = window.location.protocol;
                 const isSecure = window.isSecureContext ? '是 (Secure)' : '否 (Unsecure)';
-                debugLog.innerHTML = `<div style="color: #63b3ed;">[${time}] HTML 載入成功，正在初始化腳本...</div>`;
-                debugLog.innerHTML += `<div style="color: #63b3ed;">[${time}] 協定: ${protocol} | 安全上下文: ${isSecure}</div>`;
+                window.logToScreen(`HTML 載入成功，正在初始化腳本...`, 'log');
+                window.logToScreen(`協定: ${protocol} | 安全上下文: ${isSecure}`, 'log');
                 if (protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                    debugLog.innerHTML += `<div style="color: #e53e3e;">[${time}] ⚠️ 警告：非 HTTPS 且非 localhost 環境，麥克風 API (getUserMedia) 將被瀏覽器禁用！</div>`;
+                    window.logToScreen(`⚠️ 警告：非 HTTPS 且非 localhost 環境，麥克風 API (getUserMedia) 將被瀏覽器禁用！`, 'error');
                 }
             }
         });

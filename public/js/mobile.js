@@ -2,46 +2,7 @@
  * 喇叭好壞測試器 - 手機接收端 (Mobile) 邏輯
  */
 
-// -------------------------------------------------------------
-// 行動端即時日誌與除錯
-// -------------------------------------------------------------
-function logToScreen(msg, type = 'log') {
-    const logEl = document.getElementById('debug-log');
-    if (logEl) {
-        const time = new Date().toLocaleTimeString();
-        const color = type === 'error' ? '#f56565' : (type === 'warn' ? '#ed8936' : '#cbd5e0');
-        logEl.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;">[${time}] ${msg}</div>`;
-        logEl.scrollTop = logEl.scrollHeight;
-    }
-}
-
-// 覆寫 console 方法以方便手機端直接閱讀日誌
-const originalLog = console.log;
-const originalWarn = console.warn;
-const originalError = console.error;
-
-console.log = function(...args) {
-    originalLog.apply(console, args);
-    logToScreen(args.join(' '), 'log');
-};
-
-console.warn = function(...args) {
-    originalWarn.apply(console, args);
-    logToScreen(args.join(' '), 'warn');
-};
-
-console.error = function(...args) {
-    originalError.apply(console, args);
-    logToScreen(args.join(' '), 'error');
-};
-
-window.addEventListener('error', (event) => {
-    console.error(`JS 錯誤: ${event.message} at ${event.filename}:${event.lineno}`);
-});
-
-window.addEventListener('unhandledrejection', (event) => {
-    console.error(`Promise 拒絕: ${event.reason}`);
-});
+// 註：全域錯誤與日誌攔截已移至 index.html 最頂層，以捕捉最早期的資源載入與語法錯誤。
 
 let wsClient = null;
 let audioCtx = null;
