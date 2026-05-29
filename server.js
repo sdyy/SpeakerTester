@@ -124,6 +124,8 @@ const primaryIP = localIPs[0] || 'localhost';
             case 'mic-level':
             case 'fft-data':
             case 'test-result':
+            case 'calibrate-volume':
+            case 'volume-calibration-result':
               // 轉發這類訊息給其他配對的客戶端（例如：PC 傳給 Mobile，或 Mobile 傳給 PC）
               forwardToOthers(socket, data);
               break;
