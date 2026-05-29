@@ -57,6 +57,13 @@ const primaryIP = localIPs[0] || 'localhost';
 
     // 3. 設定 Express 應用程式
     const app = express();
+    
+    // 簡單的 HTTP 請求日誌
+    app.use((req, res, next) => {
+      console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip}`);
+      next();
+    });
+    
     app.use(express.static(path.join(__dirname, 'public')));
 
     // 路由：API 獲取 IP 清單與連線狀態
