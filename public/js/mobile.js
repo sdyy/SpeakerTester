@@ -304,7 +304,8 @@ function handleStartSweep(msg) {
     if (isTesting) stopLocalTest();
     
     isTesting = true;
-    testStartTime = msg.startTime;
+    // 解決雙端系統時鐘不同步問題：使用手機本地時間加上電腦端發聲的 250ms 延遲
+    testStartTime = Date.now() + 250;
     testDuration = msg.duration;
     testStartFreq = msg.startFreq;
     testEndFreq = msg.endFreq;
@@ -413,6 +414,8 @@ function processAndSendResults() {
 
     if (sweepDataPoints.length === 0) {
         console.warn('未收集到掃頻資料點');
+        banner.innerText = '⚠️ 錯誤：未收集到任何掃頻數據，請確認已點擊「授權麥克風」且環境有聲音。';
+        banner.style.color = '#ef4444';
         return;
     }
 
