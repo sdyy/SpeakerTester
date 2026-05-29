@@ -340,31 +340,39 @@ function handleStartSweep(msg) {
             return;
         }
 
-        // 根據對數掃頻公式，計算此時此刻電腦發出的「目標頻率」
-        // f(t) = f_start * (f_end / f_start) ^ (t / D)
-        const targetFreq = testStartFreq * Math.pow(testEndFreq / testStartFreq, elapsed / testDuration);
-
         // 讀取目前的 FFT
         analyser.getFloatFrequencyData(dataArray);
 
-        // 尋找目標頻率對應的 FFT Bin
-        const targetBin = Math.round(targetFreq / binResolution);
-        
-        if (targetBin < bufferLength) {
-            // 為了防範微小時間偏差或頻譜洩漏，我們在目標 Bin 周圍取 3 個點的極大值
-            let localMaxDb = -150;
-            for (let offset = -1; offset <= 1; offset++) {
-                const b = targetBin + offset;
-                if (b >= 0 && b < bufferLength) {
-                    if (dataArray[b] > localMaxDb) {
-                        localMaxDb = dataArray[b];
-                    }
-                }
-            }
+        // 為了防範雙端網路傳輸延遲與時鐘漂移（通常在 100ms - 500ms 之間），
+        // 我們動態計算一個寬容的時間視窗（目前時間 ± 450ms），並在此區間的頻率範圍內尋找最強能量點（Peak）
+        const timeTolerance = 0.45; // 容許 ± 450ms 的時間偏差
+        const tMin = Math.max(0, elapsed - timeTolerance);
+        const tMax = Math.min(testDuration, elapsed + timeTolerance);
 
-            // 記錄此頻點的分貝
+        const freqMin = testStartFreq * Math.pow(testEndFreq / testStartFreq, tMin / testDuration);
+        const freqMax = testStartFreq * Math.pow(testEndFreq / testStartFreq, tMax / testDuration);
+
+        // 將頻率範圍轉換成 FFT Bin 區間
+        const binMin = Math.max(0, Math.floor(freqMin / binResolution));
+        const binMax = Math.min(bufferLength - 1, Math.ceil(freqMax / binResolution));
+
+        let localMaxDb = -150;
+        let actualBin = binMin;
+
+        // 在此頻帶範圍內尋找最強的主音能量
+        for (let b = binMin; b <= binMax; b++) {
+            if (dataArray[b] > localMaxDb) {
+                localMaxDb = dataArray[b];
+                actualBin = b;
+            }
+        }
+
+        const actualFreq = Math.round(actualBin * binResolution);
+
+        // 記錄此時實際偵測到的頻點與分貝
+        if (actualFreq >= testStartFreq && actualFreq <= testEndFreq) {
             sweepDataPoints.push({
-                freq: Math.round(targetFreq),
+                freq: actualFreq,
                 db: localMaxDb
             });
         }
