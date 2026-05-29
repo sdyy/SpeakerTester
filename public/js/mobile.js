@@ -179,29 +179,27 @@ function calibrateNoiseFloor() {
     
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Float32Array(bufferLength);
+    const timeData = new Float32Array(analyser.fftSize);
     noiseFloorSpectrum = new Float32Array(bufferLength).fill(-100);
 
     const calibrationInterval = setInterval(() => {
-        analyser.getFloatFrequencyData(dataArray);
-        
-        // 計算該訊框的平均分貝值
-        let sum = 0;
-        let validBins = 0;
-        for (let i = 0; i < bufferLength; i++) {
-            // 排除無限小的無效值
-            if (dataArray[i] > -150) {
-                sum += dataArray[i];
-                validBins++;
-                // 同步記錄各頻段的最高背景噪音
-                if (dataArray[i] > noiseFloorSpectrum[i]) {
-                    noiseFloorSpectrum[i] = dataArray[i];
-                }
-            }
+        // 1. 使用時域計算該訊框的 RMS 音量
+        analyser.getFloatTimeDomainData(timeData);
+        let rmsSum = 0;
+        for (let i = 0; i < timeData.length; i++) {
+            rmsSum += timeData[i] * timeData[i];
         }
-        
-        if (validBins > 0) {
-            totalDb += (sum / validBins);
-            count++;
+        const rms = Math.sqrt(rmsSum / timeData.length);
+        const frameDb = rms > 0.000001 ? 20 * Math.log10(rms) : -120;
+        totalDb += frameDb;
+        count++;
+
+        // 2. 同步記錄各頻段的最高背景噪音，以供後續掃頻數據評估扣除使用
+        analyser.getFloatFrequencyData(dataArray);
+        for (let i = 0; i < bufferLength; i++) {
+            if (dataArray[i] > -150 && dataArray[i] > noiseFloorSpectrum[i]) {
+                noiseFloorSpectrum[i] = dataArray[i];
+            }
         }
 
         if (count >= iterations) {
@@ -244,11 +242,19 @@ function startLiveMonitor() {
         analyser.getFloatFrequencyData(dataArray);
         analyser.getByteFrequencyData(byteDataArray);
 
-        // 2. 計算即時音量與主要頻點
+        // 2. 計算即時音量 (改用時域 RMS 避免頻域稀釋)
+        const timeData = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(timeData);
+        let rmsSum = 0;
+        for (let i = 0; i < timeData.length; i++) {
+            rmsSum += timeData[i] * timeData[i];
+        }
+        const rms = Math.sqrt(rmsSum / timeData.length);
+        const rmsVolume = rms > 0.000001 ? 20 * Math.log10(rms) : -120;
+
+        // 3. 找出主要頻點
         let maxDb = -100;
         let maxBinIndex = 0;
-        let rmsSum = 0;
-        let count = 0;
 
         for (let i = 0; i < bufferLength; i++) {
             const db = dataArray[i];
@@ -260,15 +266,9 @@ function startLiveMonitor() {
                     maxDb = db;
                     maxBinIndex = i;
                 }
-                
-                // 換算成線性值計算總均方根 (RMS) 音量
-                const linear = Math.pow(10, db / 20);
-                rmsSum += linear * linear;
-                count++;
             }
         }
 
-        const rmsVolume = count > 0 ? 20 * Math.log10(Math.sqrt(rmsSum / count)) : -100;
         const mainFrequency = maxDb > -65 ? Math.round(maxBinIndex * binResolution) : 0;
 
         // 3. 更新 UI 即時數值
@@ -465,30 +465,20 @@ function handleCalibrateVolume(duration) {
     let count = 0;
     let totalDb = 0;
 
-    const sampleRate = audioCtx.sampleRate;
-    const binResolution = sampleRate / analyser.fftSize;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Float32Array(bufferLength);
+    const timeData = new Float32Array(analyser.fftSize);
 
     const calibrationInterval = setInterval(() => {
-        analyser.getFloatFrequencyData(dataArray);
-
-        // 尋找 800Hz 到 1200Hz 之間的最大分貝值 (1kHz 基準嗶聲能量)
-        let maxDb = -150;
-        for (let i = 0; i < bufferLength; i++) {
-            const freq = i * binResolution;
-            if (freq >= 800 && freq <= 1200) {
-                if (dataArray[i] > maxDb) {
-                    maxDb = dataArray[i];
-                }
-            }
+        // 使用時域計算該訊框的 RMS 音量
+        analyser.getFloatTimeDomainData(timeData);
+        let rmsSum = 0;
+        for (let i = 0; i < timeData.length; i++) {
+            rmsSum += timeData[i] * timeData[i];
         }
-
-        // 確保尋找到有效值
-        if (maxDb > -150) {
-            totalDb += maxDb;
-            count++;
-        }
+        const rms = Math.sqrt(rmsSum / timeData.length);
+        const frameDb = rms > 0.000001 ? 20 * Math.log10(rms) : -120;
+        
+        totalDb += frameDb;
+        count++;
 
         if (count >= iterations) {
             clearInterval(calibrationInterval);
